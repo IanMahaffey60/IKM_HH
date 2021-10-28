@@ -28,6 +28,12 @@ Revision: 3
 
 '''
 
+def create_ratingcurve(ifile):
+    col= ['cont elev', 'cont area', 'depth', 'incr vol1', 'cum vol1', 'incr vol2', 'incr vol2']
+    df = pd.read_csv(ifc, skiprows=10, sep="\s{2}", header = None, thousands=',', engine='python')
+    df.columns = col
+    return df
+    
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import numpy as np
