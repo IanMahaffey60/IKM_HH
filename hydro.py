@@ -1,12 +1,14 @@
 ''' Detention/Retention pond sizing and outlet sizing.
 
+Current Project:
+    1. Switching lists to dataframes for fast implementation
+
 Current Limitations:
-    1. Only works for retention pond with no outlet (lol)
-    2. Manual data entry
-    3. Plenty others
+    1. Manual data entry
+    2. Plenty others
 
 Future Functionality:
-    1. Add orifice, spillway, weir outlet types
+    1. Access actual flow series of each individual outlet
     2. Sedimentation/water quality design parameters
     3. Automatic design tools (change pond curve to meet requirements, design outlets)
     4. Add place for external time series, flow series, and volume series input
@@ -22,7 +24,7 @@ Future Functionality:
 
 Author: Ian Mahaffey, P.E.
 Date: 10/26/2021
-Revision: 2
+Revision: 3
 
 '''
 
@@ -30,7 +32,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import numpy as np
 import warnings
-
+import pandas as pd
 
 
 class Rational():
@@ -44,39 +46,32 @@ class Rational():
         5. Max time of analysis (max_time)
 
     '''
-    def __init__(self, c, i, a, tc, max_time, q=None,time_series=None, flow_series=None,
-                 vol_series=None):
+    def __init__(self, c, i, a, tc, max_time, q=None,results=None):
         self.c = c #Rational Roughness Coefficient (Unitless)
         self.i = i #Rainfall Intensity (Inches/Hour)
         self.a = a #Area (Acres)
         self.tc = tc #Time of Concentraion (Minutes)
         self.max_time = max_time #Full length of analysis (Minutes)
-        self.time_series = time_series #Time Series (List in Minutes)
-        self.vol_series = vol_series #Time Series of Volume (List in cubic feet)
-        self.flow_series = flow_series #Time Series of Flow (List in cfs)
+        self.results = results
         self.q = q #Peak Flow (cfs)
 
     def calculate(self):
-        self.time_series = []
-        self.flow_series = []
-        self.vol_series  = []
+        # np.arange(0,self.max_time,1
+        self.results = pd.DataFrame(columns=['time', 'flow', 'volume'])
+
         self.q = round(self.c*self.i*self.a,2)
 
         for i in range(0, self.tc*2+1, 1):
             rat1 = i/self.tc
             rat2 = (self.tc-(i-self.tc))/self.tc
-            self.flowvol_series_append(rat1) if i<=self.tc else self.flowvol_series_append(rat2)
-            self.time_series.append(i)
-        for i in range(self.tc*2+2, self.max_time-2*self.tc):
-            self.time_series.append(i)
-            self.flow_series.append(0)
-            self.vol_series.append(0)
+            self.flowvol_series_append(rat1, i) if i <= self.tc else self.flowvol_series_append(rat2, i)
+        for i in range(self.tc*2+1, self.max_time-2*self.tc+self.tc*2+1):
+            self.results.loc[len(self.results.index)] = [i, 0, 0]
         return self.q
     def total_vol(self):
-        return round(sum(self.vol_series),2)
-    def flowvol_series_append(self, rat):
-        self.flow_series.append(rat*self.q)
-        self.vol_series.append(rat*self.q*60)
+        return round(self.results.volume.sum(),2)
+    def flowvol_series_append(self, rat, t):
+        self.results.loc[len(self.results.index)] = [t, rat*self.q, rat*self.q*60]
 
 class DesignPond():
     '''
@@ -96,9 +91,7 @@ class DesignPond():
         6. Calculate the volume of the pond (calc_vol) - Sometimes this may not be desired if pond volume was calculated elsewhere
     '''
     def __init__(self, qin, pc, infil, rat_perv, change=False, calc_vol=False,
-                 elev_curve=None, footprint_curve=None, vol_curve=None, time_to_empty=None,
-                 time_series=None, elevation_series=None, vol_in_series=None,
-                 vol_out_series=None, vol_series=None, retain_vol_series=None,
+                 rating_curves=None, results=None,
                  find_footprint=None, find_vol_fromElev=None, find_elev_fromVol=None,
                  outlet=None):
         self.qin = qin
@@ -107,21 +100,14 @@ class DesignPond():
         self.rat_perv = rat_perv #Ratio of pervious vs. impervious (decimal)
         self.change = change #Scale pond for preliminary design purposes (Default: False)
         self.calc_vol = calc_vol #Calculate pond volume (Default: True)
-        self.elev_curve = elev_curve
-        self.footprint_curve = footprint_curve
-        self.vol_curve = vol_curve
+        self.rating_curves = rating_curves
+        self.results = results
         self.time_to_empty = time_to_empty
-        self.time_series = time_series
-        self.elevation_series = elevation_series
-        self.vol_in_series = vol_in_series
-        self.vol_out_series = vol_out_series
-        self.vol_series = vol_series
-        self.retain_vol_series = retain_vol_series
         self.find_footprint = find_footprint
         self.find_vol_fromElev = find_vol_fromElev
         self.find_elev_fromVol = find_elev_fromVol
         self.outlet = outlet
-
+        self.pond_curve = pd.DataFrame(self.pond_curve, columns=['elev', 'footprint', 'volume'])
         if self.change != False:
             self.scale_pond()
         if self.calc_vol == True:
@@ -212,31 +198,28 @@ class DesignPond():
                     self.time_to_empty = self.time_series[num]
                 val = vol
         else:
-            warnings.warn('Volume series has not been calcualted yet - consider executing the "calculate" function first')
+            warnings.warn('Volume series has not been calculated yet - consider executing the "calculate" function first')
         if self.time_to_empty == None:
             warnings.warn('Time to Empty returned: None, try increasing total analysis time')
 
     def scale_pond(self, changer):
+        self.pond_curve['']
         for num, i in enumerate(self.pond_curve):
             self.pond_curve[num] = [i[0], i[1]*changer, i[2]*changer]
         self.pond_seperate()
         return self.pond_curve
 
 class Outlet():
-    def __init__(self, low_elev, max_elev, elev_curve=None, flow_curve=None, time_series=None, flow_series=None):
+    def __init__(self, low_elev, max_elev, rating_curve=None, results=None):
         self.low_elev = low_elev
         self.max_elev = max_elev
-        self.elev_curve = elev_curve
-        self.flow_curve = flow_curve
-        self.time_series = time_series
-        self.flow_series = flow_series
-    def rating_curve(self):
-        self.elev_curve = []
-        self.flow_curve = []
-        for i in np.arange(self.low_elev, self.max_elev, .01):
-            self.elev_curve.append(round(i,2))
-            self.flow_curve.append(self.calc_flow(i))
-        return self.elev_curve, self.flow_curve
+        self.rating_curve = rating_curve
+        self.results = results
+    def calc_rating_curve(self):
+        self.results = pd.DataFrame(columns=['elev', 'flow'])
+        self.results['elev'] = np.round(np.arange(self.low_elev, self.max_elev, .01),2)
+        self.results['flow'] = self.calc_flow(self.results['elev'])
+        return self.results
 
 class Orofice(Outlet):
     def __init__(self, low_elev, max_elev, shape, diameter, coeff=None):
@@ -244,7 +227,7 @@ class Orofice(Outlet):
         self.shape = shape
         self.diameter = diameter
         self.coeff = coeff
-        self.rating_curve()
+        self.calc_rating_curve()
 
     def calc_coeff_of_discharge(self):
         if self.shape == 'Sharp Orifice':
@@ -349,7 +332,7 @@ def plot_everything(q_e, q_p, pond):
 
     plt.show()
 
-'''
+
 '''
 
 Testing Pieces
@@ -369,7 +352,7 @@ C_e = .3 #unitless
 A_p = 36.44 #acres
 A_e = 36.44 #acres
 pond_curve = [[4133, 145035, 0], [4134,154652, 48977], [4135, 164386, 101624], [4136, 174201, 270894], [4137, 174201, 443829]] #Full Size Pond
-max_time = 600 #minutes
+max_time = 40 #minutes
 
 #-------- Initialize Rational Objects and Calculate Parameters ------#
 
@@ -393,4 +376,3 @@ pond.calculate()
 print_assumptions(Q_e, Q_p, pond)
 print_results(Q_e, Q_p, pond)
 plot_everything(Q_e, Q_p, pond)
-'''
