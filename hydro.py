@@ -17,6 +17,7 @@ Future Functionality:
         b. Find Rainfall Intensity based on Tc from NOAA Rasters
         c. Extract other hydrologic and hydraulic properties from GIS
     8. Utilize QT Designer to create GUI for inputting data and visualizing results
+    9. Take input of pond rating curve from acad report or manual entry
 
 
 Author: Ian Mahaffey, P.E.
