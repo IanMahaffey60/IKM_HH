@@ -349,11 +349,9 @@ def plot_everything(q_e, q_p, pond):
 
     plt.show()
 
-'''
-'''
 
-Testing Pieces
 
+#Testing Pieces
 
 '''
 
