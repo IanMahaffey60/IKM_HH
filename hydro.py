@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 ''' Detention/Retention pond sizing and outlet sizing.
 
 Current Project:
@@ -20,6 +22,7 @@ Future Functionality:
         c. Extract other hydrologic and hydraulic properties from GIS
     8. Utilize QT Designer to create GUI for inputting data and visualizing results
     9. Take input of pond rating curve from acad report or manual entry
+    10. Import and export to hdf5 file format. Allow savable projects to create, edit, save, and load.
 
 
 Author: Ian Mahaffey, P.E.
@@ -28,17 +31,29 @@ Revision: 3
 
 '''
 
-def create_ratingcurve(ifile):
+def acad_stagestorage_ratingcurve(ifile):
+    '''
+    Creates a dataframe from the stage storage results file output from ACAD.
+    '''
     col= ['cont elev', 'cont area', 'depth', 'incr vol1', 'cum vol1', 'incr vol2', 'incr vol2']
     df = pd.read_csv(ifc, skiprows=10, sep="\s{2}", header = None, thousands=',', engine='python')
     df.columns = col
     return df
-    
+
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import numpy as np
 import warnings
 import pandas as pd
+
+class Simulation():
+    def __init__(self, start, end, step):
+        self.start = start
+        self.end = end
+        self.step = step
+
+    def foo(self):
+        pass
 
 
 class Rational():
@@ -96,8 +111,11 @@ class DesignPond():
         5. Scale pond up or down based on ratio (change)
         6. Calculate the volume of the pond (calc_vol) - Sometimes this may not be desired if pond volume was calculated elsewhere
     '''
+
+
+    #NEED TO CREATE A FUNCTION THAT MATCHES THE OUTLET ELEVATION RATING CURVES FOR THE POND - THE LOCATE WON'T WORK WITHOUT THE DATAFRAMES MATCHING
     def __init__(self, qin, pc, infil, rat_perv, change=False, calc_vol=False,
-                 rating_curves=None, results=None,
+            rating_curves=None, results=None, time_to_empty=None,
                  find_footprint=None, find_vol_fromElev=None, find_elev_fromVol=None,
                  outlet=None):
         self.qin = qin
@@ -129,27 +147,24 @@ class DesignPond():
         elif type == 'Weir':
             self.outlet[id] = Weir(input['min_elev'], input['max_elev'], input['length'], input['coeff'])
 
-    def get_flow(self, elev, outlet):
-        for num, ele in enumerate(outlet.rating_curve()[0]):
-            if ele > elev:
-                break
-        return outlet.rating_curve()[1][num]*60
+    def pond_ratingcurve(self):
+        '''
+        os = self.outlet dictionary
+        '''
+        self.pond_curve['infiltration'] = self.pond_curve['footprint'] * self.infil/12/60 * self.rat_perv
+        outlets = []
+        self.pond_curve['overall curve'] = 0
+        for o in self.outlet:
+            outlets.append(o)
+            df = self.outlet[o].results
+            self.pond_curve[self.outlet[o]] = df.loc[df['elev'] == self.pond_curve['elev'], 'flow']
+            self.pond_curve['overall curve'] += df.loc[df['elev'] == self.pond_curve['elev'], 'flow']
+        self.pond_curve['overall curve'] += self.pond_curve['infiltration']
+        return self.pond_curve
 
     def calculate(self):
-        self.find_footprint = interp1d(self.elev_curve, self.footprint_curve)
-        self.find_vol_fromElev = interp1d(self.elev_curve, self.vol_curve)
-        self.find_elev_fromVol = interp1d(self.vol_curve, self.elev_curve)
-        elev_bottom = min([elev[0] for elev in self.pond_curve])
-        elev = self.pond_curve[0][0]
-
-        self.time_series = [0]
-        self.elevation_series = [elev_bottom]
-        self.vol_in_series = [0]
-        self.vol_out_series = [0]
-        self.vol_series = [0]
-        self.retain_vol_series = [0]
-        self.outlet_series = {}
-        self.infil_series = [0]
+        elev_bottom = min(self.pond_curve['elev'])
+        elev = min(self.pond_curve['elev'])
 
         for num, qi in enumerate(self.qin.flow_series):
             in_vol = qi*60 #turns to cubic feet
@@ -209,17 +224,15 @@ class DesignPond():
             warnings.warn('Time to Empty returned: None, try increasing total analysis time')
 
     def scale_pond(self, changer):
-        self.pond_curve['']
-        for num, i in enumerate(self.pond_curve):
-            self.pond_curve[num] = [i[0], i[1]*changer, i[2]*changer]
+        self.pond_curve['footprint'] = self.pond_curve['footprint']*changer
+        self.pond_curve['volume'] = self.pond_curve['volume']*changer
         self.pond_seperate()
         return self.pond_curve
 
 class Outlet():
-    def __init__(self, low_elev, max_elev, rating_curve=None, results=None):
+    def __init__(self, low_elev, max_elev, results=None):
         self.low_elev = low_elev
         self.max_elev = max_elev
-        self.rating_curve = rating_curve
         self.results = results
     def calc_rating_curve(self):
         self.results = pd.DataFrame(columns=['elev', 'flow'])
@@ -228,8 +241,8 @@ class Outlet():
         return self.results
 
 class Orofice(Outlet):
-    def __init__(self, low_elev, max_elev, shape, diameter, coeff=None):
-        super().__init__(low_elev, max_elev)
+    def __init__(self, low_elev, max_elev, shape, diameter, coeff=None, results=None):
+        super().__init__(low_elev, max_elev, results)
         self.shape = shape
         self.diameter = diameter
         self.coeff = coeff
@@ -247,11 +260,11 @@ class Orofice(Outlet):
         return round(q,2)
 
 class Weir(Outlet):
-    def __init__(self, low_elev, max_elev, length, coeff):
+    def __init__(self, low_elev, max_elev, length, coeff, results=None):
         super().__init__(low_elev, max_elev)
         self.coeff = coeff
         self.length = length
-        self.rating_curve()
+        self.calc_rating_curve()
 
     def calc_flow(self, elev):
         q = self.coeff * self.length * (elev - self.low_elev+.003)**(3/2)
@@ -371,14 +384,15 @@ Q_e.calculate()
 
 pond = DesignPond(Q_p, pond_curve, infil, rat_perv)
 pond.scale_pond(.05)
-pond.calc_volume()
+# pond.calc_volume()
 pond.add_outlet('Orofice', 'o1', min_elev=4133, max_elev=4137, shape='Sharp Orifice', diameter=8)
 pond.add_outlet('Orofice', 'o2', min_elev=4134, max_elev=4137, shape='Sharp Orifice', diameter=6)
 pond.add_outlet('Weir', 'w1', min_elev=4133, max_elev=4137, length=4, coeff=1.3)
-pond.calculate()
-
-#----------- Print and Plot Results ---------#
-
-print_assumptions(Q_e, Q_p, pond)
-print_results(Q_e, Q_p, pond)
-plot_everything(Q_e, Q_p, pond)
+print (pond.pond_ratingcurve())
+# pond.calculate()
+#
+# #----------- Print and Plot Results ---------#
+#
+# print_assumptions(Q_e, Q_p, pond)
+# print_results(Q_e, Q_p, pond)
+# plot_everything(Q_e, Q_p, pond)
