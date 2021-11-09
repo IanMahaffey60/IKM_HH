@@ -26,8 +26,8 @@ Future Functionality:
 
 
 Author: Ian Mahaffey, P.E.
-Date: 10/26/2021
-Revision: 3
+Date: 11/8/2021
+Revision: 4
 
 '''
 import matplotlib.pyplot as plt
@@ -36,7 +36,7 @@ import numpy as np
 import warnings
 import pandas as pd
 from time import time
-
+from datetime import datetime, timedelta
 
 
 
@@ -49,6 +49,7 @@ def timer_func(func):
         t2 = time()
         print(f'Function {func.__name__!r} executed in {(t2-t1):.4f}s')
         return result
+        pass
     return wrap_func
 
 def acad_stagestorage_ratingcurve(ifile):
@@ -62,13 +63,71 @@ def acad_stagestorage_ratingcurve(ifile):
 
 
 class Simulation():
-    def __init__(self, start, end, step):
+    def __init__(self, name, start, end, step, catchments=None, ponds=None, conduits=None,
+                 junctions=None, model=None):
+        self.name = name
         self.start = start
         self.end = end
         self.step = step
+        self.catchments = catchments
+        self.ponds = ponds
+        self.conduits = conduits
+        self.junctions = junctions
+        self.model = model
+        print (f'----- Simulation Object "{self.name}" created. -----\n')
 
-    def foo(self):
-        pass
+    @timer_func
+    def add_catchment(self, in_catch):
+        print (f'Adding {in_catch.name} to simulation "{self.name}"...')
+        if self.catchments == None:
+            self.catchments = {}
+        self.catchments[in_catch.name] = in_catch
+        self.catchments[in_catch.name].calculate(self.start, self.end, self.step)
+        print (f'{in_catch.name} added to simulation "{self.name}".\n')
+        return self.catchments
+
+    @timer_func
+    def add_pond(self, in_pond):
+        print (f'Adding {in_pond.name} to simulation "{self.name}"...')
+        if self.ponds == None:
+            self.ponds = {}
+        self.ponds[in_pond.name] = in_pond
+        print (f'{in_pond.name} added to simulation "{self.name}".\n')
+        return self.ponds
+
+        '''
+    def add_conduit(self, in_conduit):
+        if self.conduits == None:
+            self.conduits = {}
+        self.conduits[in_conduit] = in_conduit
+        return self.conduits
+        '''
+
+        '''
+    def add_junction(self, in_junction):
+        if self.junctions == None:
+            self.junctions = {}
+        self.junctions[in_junction] = in_junction
+        return self.junctions
+        '''
+
+    @timer_func
+    def start_simulation(self):
+        print ('Starting simulation...')
+
+        print (f'Start Date = {self.start}, End Date = {self.end}, Time Step = {self.step} Minutes')
+
+        self.model = pd.DataFrame(columns=['Time'])
+        time = start
+        while time <= end:
+            self.model = self.model.append({'Time': time}, ignore_index=True)
+
+            #This is where most of the actual computations would happen, in regards to the simulation/system
+            time += step
+
+        print (self.model)
+        print ('Simulation Ended.\n')
+
 
 
 class Rational():
@@ -82,7 +141,8 @@ class Rational():
         5. Max time of analysis (max_time)
 
     '''
-    def __init__(self, c, i, a, tc, max_time, q=None,results=None):
+    def __init__(self, name, c, i, a, tc, q=None,results=None, ds=None):
+        self.name = name
         self.c = c #Rational Roughness Coefficient (Unitless)
         self.i = i #Rainfall Intensity (Inches/Hour)
         self.a = a #Area (Acres)
@@ -90,24 +150,49 @@ class Rational():
         self.max_time = max_time #Full length of analysis (Minutes)
         self.results = results
         self.q = q #Peak Flow (cfs)
-    @timer_func
-    def calculate(self):
-        # np.arange(0,self.max_time,1
-        self.results = pd.DataFrame(columns=['time', 'flow', 'volume'])
+        self.ds = ds #Downstream object
+        print (f'----- Rational Object "{self.name}" created. -----\n')
 
         self.q = round(self.c*self.i*self.a,2)
 
-        #THERES A TON OF POTENTIAL TO SPEED THIS UP - DOESN'T NEED TO BE A LOOP, MAYBE SOME SORT OF IF/THEN STATEMENT
-        for i in range(0, self.tc*2+1, 1):
-            rat1 = i/self.tc
-            rat2 = (self.tc-(i-self.tc))/self.tc
+
+    @timer_func
+    def calculate(self, start, end, step):
+        '''
+        HUGE LIMITATION CURRENLTY: ONLY WORKS IF TIME STEP IS 1 SECOND
+        THIS FUNCTION IS PRETTY BROKEN AND I'M NOT REALLY SURE HOW TO FIX IT, YET. NEED TO FIGURE OUT HOW TO STRUCTURE CLASSES FIRST
+        '''
+        print (f'Developing time series data for Rational Object "{self.name}"...')
+        if self.tc < step.total_seconds()/60 * 2: warnings.warn('Time step is too big - make time step smaller')
+        self.results = pd.DataFrame(columns=['time', 'flow', 'volume'])
+
+        total_time = (end-start).total_seconds()/step.total_seconds()
+        self.results['time'] = [start + timedelta(minutes=x) for x in range(int(total_time))]
+
+        slope = self.q/self.tc
+        print (slope)
+        print (self.results)
+        # self.results['flow'] = self.results['flow'.apply(lambda x: (self.results['time']-start)]
+
+        # peak = start + timedelta(minutes=self.tc)
+        # print (self.results)
+
+        # self.results['flow'] = self.results['flow'].apply(lambda x: (((self.results['time']-start).total_seconds/60)/self.tc*self.q) if (self.results['time'].total_seconds/60) <= self.tc else ((self.tc-(self.results['time'].total_seconds/60-self.tc))/self.tc * self.q))
+        # print (self.results)
+
+
+        # THIS IS ALL FUCKED
+        while time <= end:
             self.flowvol_series_append(rat1, i) if i <= self.tc else self.flowvol_series_append(rat2, i)
         for i in range(self.tc*2+1, self.max_time-2*self.tc+self.tc*2+1):
             self.results.loc[len(self.results.index)] = [i, 0, 0]
+            time += step
+        print (f'Developed time series data for Rational Object "{self.name}".\n')
         return self.q
     @timer_func
     def total_vol(self):
-        return round(self.results.volume.sum(),2)
+        print (f'The total volume produced by the Rational Object "{self.name}" is {total_vol := round(self.results.volume.sum(),2)}" cubic feet.\n')
+        return total_vol
     @timer_func
     def flowvol_series_append(self, rat, t):
         self.results.loc[len(self.results.index)] = [t, rat*self.q, rat*self.q*60]
@@ -131,11 +216,11 @@ class DesignPond():
     '''
 
 
-    def __init__(self, qin, pc, infil, rat_perv, change=False, calc_vol=False,
+    def __init__(self, name, pc, infil, rat_perv, change=False, calc_vol=False,
             rating_curves=None, results=None, time_to_empty=None,
                  find_footprint=None, find_vol_fromElev=None, find_elev_fromVol=None,
                  outlet=None):
-        self.qin = qin
+        self.name = name
         self.pond_curve = pc #dataframe with all hydraulic rating curves, including outlets
         self.infil = infil #Infiltration Rate (Inches / Hour)
         self.rat_perv = rat_perv #Ratio of pervious vs. impervious (decimal)
@@ -149,14 +234,17 @@ class DesignPond():
         self.find_elev_fromVol = find_elev_fromVol
         self.outlet = outlet
         self.pond_curve = pd.DataFrame(self.pond_curve, columns=['elev', 'footprint', 'volume'])
+        print (f'----- DesignPond Object "{self.name}" created. -----\n')
         if self.change != False:
             self.scale_pond()
         if self.calc_vol == True:
             self.calc_volume()
         self.interp_pond()
         self.pond_ratingcurve(None)
+
     @timer_func
     def add_outlet(self, type, **input):
+        print (f'Adding {input["name"]} to pond "{self.name}..."')
         if not self.outlet:
             self.outlet = {}
         if type == 'Orofice':
@@ -165,6 +253,8 @@ class DesignPond():
             self.outlet[input['name']] = Weir(input['name'], input['min_elev'], input['max_elev'], input['length'], input['coeff'])
         self.pond_curve['elev'] = round(self.pond_curve['elev'],2)
         self.pond_ratingcurve(self.outlet[input['name']])
+        print (f'Added {input["name"]} to pond "{self.name}".\n')
+
     @timer_func
     def interp_pond(self):
         newp = pd.DataFrame(np.arange(self.pond_curve['elev'].min(), self.pond_curve['elev'].max(), .01))
@@ -173,11 +263,14 @@ class DesignPond():
         newp['volume'] = interp1d(self.pond_curve['elev'], self.pond_curve['volume'])(newp['elev'])
         self.pond_curve = newp
         return self.pond_curve
+
     @timer_func
     def pond_ratingcurve(self, outlet):
         '''
         os = self.outlet dictionary
         '''
+        print (f'Developing rating curve for pond "{self.name}"...')
+
         if 'infiltration' not in self.pond_curve:
             self.pond_curve['infiltration'] = self.pond_curve['footprint'] * self.infil/12/60 * self.rat_perv
             self.pond_curve['overall outflow'] = self.pond_curve['infiltration']
@@ -187,7 +280,9 @@ class DesignPond():
             self.pond_curve.rename(columns={'flow': outlet.name}, inplace=True)
             self.pond_curve[outlet.name] = self.pond_curve[outlet.name].fillna(0)
             self.pond_curve['overall outflow'] = self.pond_curve[outlet.name] + self.pond_curve['overall outflow']
+        print (f'Developed rating curve for pond "{self.name}".\n')
         return self.pond_curve
+
     # @timer_func
     # def calculate(self):
     #     elev_bottom = min(self.pond_curve['elev'])
@@ -214,6 +309,7 @@ class DesignPond():
     #         self.time_series.append(self.qin.time_series[num])
     #         self.elevation_series.append(elev)
     #     self.pond_empty_time()
+
     @timer_func
     def calc_volume(self):
         last_vol = []
@@ -227,7 +323,8 @@ class DesignPond():
         for num, i in enumerate(self.pond_curve):
             i[2] = last_vol[num]
         return self.pond_curve
-    @timer_func
+
+    # @timer_func
     # def pond_empty_time(self):
     #     val = -1
     #     if self.vol_series is not None:
@@ -239,19 +336,27 @@ class DesignPond():
     #         warnings.warn('Volume series has not been calculated yet - consider executing the "calculate" function first')
     #     if self.time_to_empty == None:
     #         warnings.warn('Time to Empty returned: None, try increasing total analysis time')
+
     @timer_func
     def scale_pond(self, changer):
+        print (f'Scaling pond "{self.name}" by {changer*100}%...')
         self.pond_curve['footprint'] = self.pond_curve['footprint']*changer
         self.pond_curve['volume'] = self.pond_curve['volume']*changer
         self.pond_ratingcurve(None)
+        print (f'Scaled pond "{self.name}" by {changer*100}%.')
         return self.pond_curve
 
 class Outlet():
+    '''
+    An outlet object that is currently being used for the DesignPond
+    '''
     def __init__(self, name, low_elev, max_elev, results=None):
         self.name = name
         self.low_elev = low_elev
         self.max_elev = max_elev
         self.results = results
+        print (f'----- Outlet Object "{self.name}" create. -----\n')
+
     @timer_func
     def calc_rating_curve(self):
         self.results = pd.DataFrame(columns=['elev', 'flow'])
@@ -266,6 +371,7 @@ class Orofice(Outlet):
         self.diameter = diameter
         self.coeff = coeff
         self.calc_rating_curve()
+
     @timer_func
     def calc_coeff_of_discharge(self):
         if self.shape == 'Sharp Orifice':
@@ -274,6 +380,7 @@ class Orofice(Outlet):
         elif self.shape == 'Tube':
             self.coeff = 0.80
             return 0.80
+
     @timer_func
     def calc_flow(self, elev):
         q = self.calc_coeff_of_discharge() * (np.pi*(self.diameter/12)**2/4) * np.sqrt(2*9.81*(elev-self.low_elev))
@@ -285,6 +392,7 @@ class Weir(Outlet):
         self.coeff = coeff
         self.length = length
         self.calc_rating_curve()
+
     @timer_func
     def calc_flow(self, elev):
         q = self.coeff * self.length * (elev - self.low_elev+.003)**(3/2)
@@ -393,22 +501,24 @@ A_e = 36.44 #acres
 pond_curve = [[4133, 145035, 0], [4134,154652, 48977], [4135, 164386, 101624], [4136, 174201, 270894], [4137, 174201, 443829]] #Full Size Pond
 max_time = 40 #minutes
 
-#-------- Initialize Rational Objects and Calculate Parameters ------#
+start = datetime(year=2021, day=7, month=11)
+end = start + timedelta(days=1)
+step = timedelta(minutes=1)
 
-Q_p = Rational(C_p, i_25yr, A_p, Tc_p, max_time)
-Q_p.calculate()
-Q_e = Rational(C_e, i_25yr, A_e, Tc_e, max_time)
-Q_e.calculate()
+sim1 = Simulation('sim1', start, end, step)
+sim1.add_catchment(Rational('C-100', C_p, i_25yr, A_p, Tc_p, ds='pond1'))
+sim1.add_catchment(Rational('C-100x', C_e, i_25yr, A_e, Tc_e))
 
-#------- Initialize Pond Object and Calculate Parameters ---------#
 
-pond = DesignPond(Q_p, pond_curve, infil, rat_perv)
+pond = DesignPond('pond1', pond_curve, infil, rat_perv)
 pond.scale_pond(.05)
-# pond.calc_volume()
 pond.add_outlet('Orofice', name='o1', min_elev=4133, max_elev=4137, shape='Sharp Orifice', diameter=8)
 pond.add_outlet('Orofice', name='o2', min_elev=4134, max_elev=4137, shape='Sharp Orifice', diameter=6)
 pond.add_outlet('Weir', name='w1', min_elev=4133, max_elev=4137, length=4, coeff=1.3)
 
+sim1.add_pond(pond)
+
+sim1.start_simulation()
 
 # #----------- Print and Plot Results ---------#
 #
