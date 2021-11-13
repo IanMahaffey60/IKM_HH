@@ -38,19 +38,20 @@ import pandas as pd
 from time import time
 from datetime import datetime, timedelta
 
+# pd.set_option('display.max_rows', None)
 
 
-def timer_func(func):
-    # This function shows the execution time of
-    # the function object passed
-    def wrap_func(*args, **kwargs):
-        t1 = time()
-        result = func(*args, **kwargs)
-        t2 = time()
-        print(f'Function {func.__name__!r} executed in {(t2-t1):.4f}s')
-        return result
-        pass
-    return wrap_func
+# def timer_func(func):
+#     # This function shows the execution time of
+#     # the function object passed
+#     def wrap_func(*args, **kwargs):
+#         t1 = time()
+#         result = func(*args, **kwargs)
+#         t2 = time()
+#         print(f'Function {func.__name__!r} executed in {(t2-t1):.4f}s')
+#         return result
+#         pass
+#     return wrap_func
 
 def acad_stagestorage_ratingcurve(ifile):
     '''
@@ -61,10 +62,20 @@ def acad_stagestorage_ratingcurve(ifile):
     df.columns = col
     return df
 
+class ModelResults():
+    def __init__(self, model=None):
+        self.model = model
+    def model_to_csv(self, outfile):
+        print (f'Saving model results to {outfile}.csv')
+        self.model.to_csv('.'.join([outfile,'csv']))
+    def model_to_pkl(self, outfile):
+        print (f'Saving model results to {outfile}.pkl')
+        self.model.to_pickle('.'.join([outfile,'pkl']))
 
-class Simulation():
+class Simulation(ModelResults):
     def __init__(self, name, start, end, step, catchments=None, ponds=None, conduits=None,
                  junctions=None, model=None):
+        super().__init__(ModelResults)
         self.name = name
         self.start = start
         self.end = end
@@ -76,7 +87,7 @@ class Simulation():
         self.model = model
         print (f'----- Simulation Object "{self.name}" created. -----\n')
 
-    @timer_func
+    #@timer_func
     def add_catchment(self, in_catch):
         print (f'Adding {in_catch.name} to simulation "{self.name}"...')
         if self.catchments == None:
@@ -86,7 +97,7 @@ class Simulation():
         print (f'{in_catch.name} added to simulation "{self.name}".\n')
         return self.catchments
 
-    @timer_func
+    #@timer_func
     def add_pond(self, in_pond):
         print (f'Adding {in_pond.name} to simulation "{self.name}"...')
         if self.ponds == None:
@@ -111,21 +122,30 @@ class Simulation():
         return self.junctions
         '''
 
-    @timer_func
+    #@timer_func
     def start_simulation(self):
         print ('Starting simulation...')
 
         print (f'Start Date = {self.start}, End Date = {self.end}, Time Step = {self.step} Minutes')
 
-        self.model = pd.DataFrame(columns=['Time'])
-        time = start
-        while time <= end:
-            self.model = self.model.append({'Time': time}, ignore_index=True)
+        #Create simulation time series, from start to finish, with set step
+        self.model = pd.DataFrame(columns=['time'])
+        total_time = (end-start).total_seconds()/step.total_seconds()
+        self.model['time'] = [self.start + timedelta(minutes=x) for x in range(int(total_time))]
 
-            #This is where most of the actual computations would happen, in regards to the simulation/system
-            time += step
+        #Add results of catchment objects to model dataframe
+        for catchment in self.catchments:
+            df = self.catchments[catchment].results
+            self.model = self.model.join(df.set_index('time'), on='time')
 
-        print (self.model)
+        #Iterate through time series and add/edit hydraulic objects based on hydrologic events
+        for time in self.model['time']:
+            pass
+
+
+        self.model_to_csv('modelresults')
+        self.model_to_pkl('modelresults')
+
         print ('Simulation Ended.\n')
 
 
@@ -156,44 +176,35 @@ class Rational():
         self.q = round(self.c*self.i*self.a,2)
 
 
-    @timer_func
+    #@timer_func
     def calculate(self, start, end, step):
         '''
-        HUGE LIMITATION CURRENLTY: ONLY WORKS IF TIME STEP IS 1 SECOND
-        THIS FUNCTION IS PRETTY BROKEN AND I'M NOT REALLY SURE HOW TO FIX IT, YET. NEED TO FIGURE OUT HOW TO STRUCTURE CLASSES FIRST
+        Don't really like how this is set up - need to integrate into simulation better
         '''
         print (f'Developing time series data for Rational Object "{self.name}"...')
         if self.tc < step.total_seconds()/60 * 2: warnings.warn('Time step is too big - make time step smaller')
-        self.results = pd.DataFrame(columns=['time', 'flow', 'volume'])
+        self.results = pd.DataFrame()
 
         total_time = (end-start).total_seconds()/step.total_seconds()
         self.results['time'] = [start + timedelta(minutes=x) for x in range(int(total_time))]
-
+        self.results['step'] = range(len(self.results['time']))
         slope = self.q/self.tc
-        print (slope)
-        print (self.results)
-        # self.results['flow'] = self.results['flow'.apply(lambda x: (self.results['time']-start)]
+        self.results.loc[self.results.index <= self.tc, f'{self.name} flow'] = slope * self.results['step']
+        self.results.loc[(self.results.index > self.tc) & (self.results.index <= self.tc * 2), f'{self.name} flow'] = -slope * self.results['step'] + 2 * self.q
+        self.results.loc[self.results.index > self.tc * 2, f'{self.name} flow'] = 0
 
-        # peak = start + timedelta(minutes=self.tc)
-        # print (self.results)
+        self.results = self.results.drop('step', 1)
 
-        # self.results['flow'] = self.results['flow'].apply(lambda x: (((self.results['time']-start).total_seconds/60)/self.tc*self.q) if (self.results['time'].total_seconds/60) <= self.tc else ((self.tc-(self.results['time'].total_seconds/60-self.tc))/self.tc * self.q))
-        # print (self.results)
+        self.results[f'{self.name} step_volume'] = self.results[f'{self.name} flow'] * step.total_seconds() #cubic feet
+        self.results[f'{self.name} cum_volume'] = self.results[f'{self.name} step_volume'].cumsum()
 
-
-        # THIS IS ALL FUCKED
-        while time <= end:
-            self.flowvol_series_append(rat1, i) if i <= self.tc else self.flowvol_series_append(rat2, i)
-        for i in range(self.tc*2+1, self.max_time-2*self.tc+self.tc*2+1):
-            self.results.loc[len(self.results.index)] = [i, 0, 0]
-            time += step
         print (f'Developed time series data for Rational Object "{self.name}".\n')
         return self.q
-    @timer_func
+    #@timer_func
     def total_vol(self):
         print (f'The total volume produced by the Rational Object "{self.name}" is {total_vol := round(self.results.volume.sum(),2)}" cubic feet.\n')
         return total_vol
-    @timer_func
+    #@timer_func
     def flowvol_series_append(self, rat, t):
         self.results.loc[len(self.results.index)] = [t, rat*self.q, rat*self.q*60]
 
@@ -242,7 +253,7 @@ class DesignPond():
         self.interp_pond()
         self.pond_ratingcurve(None)
 
-    @timer_func
+    #@timer_func
     def add_outlet(self, type, **input):
         print (f'Adding {input["name"]} to pond "{self.name}..."')
         if not self.outlet:
@@ -255,7 +266,7 @@ class DesignPond():
         self.pond_ratingcurve(self.outlet[input['name']])
         print (f'Added {input["name"]} to pond "{self.name}".\n')
 
-    @timer_func
+    #@timer_func
     def interp_pond(self):
         newp = pd.DataFrame(np.arange(self.pond_curve['elev'].min(), self.pond_curve['elev'].max(), .01))
         newp.columns = ['elev']
@@ -264,7 +275,7 @@ class DesignPond():
         self.pond_curve = newp
         return self.pond_curve
 
-    @timer_func
+    #@timer_func
     def pond_ratingcurve(self, outlet):
         '''
         os = self.outlet dictionary
@@ -283,7 +294,7 @@ class DesignPond():
         print (f'Developed rating curve for pond "{self.name}".\n')
         return self.pond_curve
 
-    # @timer_func
+    # #@timer_func
     # def calculate(self):
     #     elev_bottom = min(self.pond_curve['elev'])
     #     elev = min(self.pond_curve['elev'])
@@ -310,7 +321,7 @@ class DesignPond():
     #         self.elevation_series.append(elev)
     #     self.pond_empty_time()
 
-    @timer_func
+    #@timer_func
     def calc_volume(self):
         last_vol = []
         last_sqft = []
@@ -324,7 +335,7 @@ class DesignPond():
             i[2] = last_vol[num]
         return self.pond_curve
 
-    # @timer_func
+    # #@timer_func
     # def pond_empty_time(self):
     #     val = -1
     #     if self.vol_series is not None:
@@ -337,7 +348,7 @@ class DesignPond():
     #     if self.time_to_empty == None:
     #         warnings.warn('Time to Empty returned: None, try increasing total analysis time')
 
-    @timer_func
+    #@timer_func
     def scale_pond(self, changer):
         print (f'Scaling pond "{self.name}" by {changer*100}%...')
         self.pond_curve['footprint'] = self.pond_curve['footprint']*changer
@@ -357,7 +368,7 @@ class Outlet():
         self.results = results
         print (f'----- Outlet Object "{self.name}" create. -----\n')
 
-    @timer_func
+    #@timer_func
     def calc_rating_curve(self):
         self.results = pd.DataFrame(columns=['elev', 'flow'])
         self.results['elev'] = np.round(np.arange(self.low_elev, self.max_elev, .01),2)
@@ -372,7 +383,7 @@ class Orofice(Outlet):
         self.coeff = coeff
         self.calc_rating_curve()
 
-    @timer_func
+    #@timer_func
     def calc_coeff_of_discharge(self):
         if self.shape == 'Sharp Orifice':
             self.coeff = 0.62
@@ -381,7 +392,7 @@ class Orofice(Outlet):
             self.coeff = 0.80
             return 0.80
 
-    @timer_func
+    #@timer_func
     def calc_flow(self, elev):
         q = self.calc_coeff_of_discharge() * (np.pi*(self.diameter/12)**2/4) * np.sqrt(2*9.81*(elev-self.low_elev))
         return round(q,2)
@@ -393,7 +404,7 @@ class Weir(Outlet):
         self.length = length
         self.calc_rating_curve()
 
-    @timer_func
+    #@timer_func
     def calc_flow(self, elev):
         q = self.coeff * self.length * (elev - self.low_elev+.003)**(3/2)
         return round(q,2)
