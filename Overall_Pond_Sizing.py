@@ -14,7 +14,7 @@ C_e = .3 #unitless
 A_p = 36.44 #acres
 A_e = 36.44 #acres
 pond_curve = [[4133, 145035, 0], [4134,154652, 48977], [4135, 164386, 101624], [4136, 174201, 270894], [4137, 174201, 443829]] #Full Size Pond
-max_time = 300 #minutes
+max_time = 4800 #minutes
 
 #-------- Initialize Rational Objects and Calculate Parameters ------#
 

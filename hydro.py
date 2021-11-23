@@ -123,7 +123,7 @@ class DesignPond():
         self.outlet = outlet
 
         if self.change != False:
-            self.scale_pond()
+            self.scale_pond(self.change)
         if self.calc_vol == True:
             self.calc_volume()
 
