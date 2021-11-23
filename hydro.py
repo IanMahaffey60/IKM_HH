@@ -160,6 +160,10 @@ class DesignPond():
         self.infil_series = [0]
 
         for num, qi in enumerate(self.qin.flow_series):
+            '''
+            self.qin.flow_series is currently a catchment object. But once a connected model is
+            put together, this can be any upstream node that has a "flow_series" attribute
+            '''
             in_vol = qi*60 #turns to cubic feet
             infil_vol = self.infil/12/60*self.find_footprint(elev)*self.rat_perv
             self.infil_series.append(self.infil/12/60*self.find_footprint(elev)*self.rat_perv)
