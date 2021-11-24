@@ -21,6 +21,7 @@ with open('simulations.json', 'r') as f:
 catchments = {}
 
 for catch in icatch:
+    print (f'---- Creating {catch} Catchment ----')
     dobj = icatch[catch]
     catchments[catch] = {}
     catchments[catch] = Rational(dobj['C'], dobj['i'], dobj['A'], dobj['Tc'], isim[dobj['sim']]['max_time'])
@@ -33,19 +34,22 @@ for catch in icatch:
 ponds = {}
 
 for pond in ipond:
+    print (f'---- Creating {pond} Pond ----')
     pobj = ipond[pond]
     ponds[pond] = {}
     ponds[pond] = DesignPond(catchments[pobj['us']], pobj['pond_curve'], pobj['infil'], pobj['rat_perv'], change=1, calc_vol=True)
     ponds[pond].calculate()
 
-# print (ponds)
 
 
 #----------- Print and Plot Results ---------#
 
 def results(catch_e, catch_p, p):
-    print_assumptions(catchments['Q_e'], catchments['Q_p'], ponds['Pond1'])
-    print_results(catchments['Q_e'], catchments['Q_p'], ponds['Pond1'])
-    plot_everything(catchments['Q_e'], catchments['Q_p'], ponds['Pond1'])
+    print_assumptions(catch_e, catch_p, p)
+    print_results(catch_e, catch_p, p)
+    plot_everything(catch_e, catch_p, p)
 
-results(catchments['Q_e'], catchments['Q_p'], ponds['Pond1'])
+results(catchments['R-100_25'], catchments['R-100_25'], ponds['South Pond'])
+results(catchments['R-200_25'], catchments['R-200_25'], ponds['West Pond'])
+results(catchments['R-300_25'], catchments['R-300_25'], ponds['East Pond'])
+results(catchments['R-400_25'], catchments['R-400_25'], ponds['North Pond'])

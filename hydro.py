@@ -165,8 +165,14 @@ class DesignPond():
             put together, this can be any upstream node that has a "flow_series" attribute
             '''
             in_vol = qi*60 #turns to cubic feet
-            infil_vol = self.infil/12/60*self.find_footprint(elev)*self.rat_perv
-            self.infil_series.append(self.infil/12/60*self.find_footprint(elev)*self.rat_perv)
+            try:
+                infil_vol = self.infil/12/60*self.find_footprint(elev)*self.rat_perv
+                self.infil_series.append(self.infil/12/60*self.find_footprint(elev)*self.rat_perv)
+            except:
+                warnings.warn('Pond is not big enough')
+                infil_vol = 0
+                self.infil_series.append(0)
+
             out_vol = infil_vol
             if self.outlet:
                 for out in self.outlet:
@@ -180,7 +186,11 @@ class DesignPond():
                 self.vol_series.append(vol[-1]+0)
             else:
                 self.vol_series.append(self.vol_series[-1]+in_vol-out_vol)
-            elev = np.round(self.find_elev_fromVol(self.vol_series[-1]),2)
+            try:
+                elev = np.round(self.find_elev_fromVol(self.vol_series[-1]),2)
+            except:
+                warnings.warn(f'Pond is not big enough and has flowed over the highest elevation provided')
+                elev = 99999
             self.time_series.append(self.qin.time_series[num])
             self.elevation_series.append(elev)
         self.pond_empty_time()
@@ -209,6 +219,7 @@ class DesignPond():
         return self.pond_curve
 
     def pond_empty_time(self):
+        # print (f'---- Calculating empty time for {"one of the ponds"} ----')
         val = -1
         if self.vol_series is not None:
             for num, vol in enumerate(self.vol_series):
@@ -218,6 +229,7 @@ class DesignPond():
         else:
             warnings.warn('Volume series has not been calcualted yet - consider executing the "calculate" function first')
         if self.time_to_empty == None:
+            self.time_to_empty = 99999999
             warnings.warn('Time to Empty returned: None, try increasing total analysis time')
 
     def scale_pond(self, changer):
@@ -293,7 +305,7 @@ def print_results(q_e, q_p, pond):
     print (f'Proposed Total Volume = {q_p.total_vol()} cu-ft')
     print (f'Required Volume Retained = {q_p.total_vol()-q_e.total_vol()} cu-ft')
     print (f'Max Infiltration Volume Rate = {round(max(pond.vol_out_series),2)} cu-ft / minute')
-    print (f'Max pond footprint = {np.round(pond.find_footprint(max(pond.elevation_series)),2)} sq-ft')
+    # print (f'Max pond footprint = {np.round(pond.find_footprint(max(pond.elevation_series)),2)} sq-ft')
     print (f'Total time till pond empties = {pond.time_to_empty} minutes ({round(pond.time_to_empty/60,2)} hours)')
     print (f'Minimum elevation of pond = {pond.elevation_series[0]} feet')
     print (f'Max water surface elevation in pond = {np.round(max(pond.elevation_series),2)} feet')
