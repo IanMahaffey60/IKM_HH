@@ -8,47 +8,41 @@ import pandas as pd
 
 wpond = acad_stagestorage_ratingcurve(r"L:\LAProj\10067.006 - Building D-2 - Victory Logistics\Civil\Hydrology\calculations\WestPond_StageStorage.txt")
 epond = acad_stagestorage_ratingcurve(r"L:\LAProj\10067.006 - Building D-2 - Victory Logistics\Civil\Hydrology\calculations\EastPond_StageStorage.txt")
-spond = acad_stagestorage_ratingcurve(r"L:\LAProj\10067.006 - Building D-2 - Victory Logistics\Civil\Hydrology\calculations\SouthPond_StageStorage.txt")
+spond = acad_stagestorage_ratingcurve(r"L:\LAProj\10067.006 - Building D-2 - Victory Logistics\Civil\Hydrology\calculations\SouthPond_rev1_StageStorage.txt")
 npond = acad_stagestorage_ratingcurve(r"L:\LAProj\10067.006 - Building D-2 - Victory Logistics\Civil\Hydrology\calculations\NorthPond_StageStorage.txt")
 
 
 # epond.append([4153, 12500, 100000])
 
 # print (epond)
-icatch = {'R-100_5': {'Tc': 10, 'C': .85, 'i': 1.56, 'A': 28.44, 'sim': 'pro_5_sim', 'event': 5},
-          'R-100_25': {'Tc': 10, 'C': .9, 'i': 2.51, 'A': 28.44, 'sim': 'pro_25_sim' , 'event': 25},
-          'R-100_100': {'Tc': 10, 'C': .9, 'i': 3.68, 'A': 28.44, 'sim': 'pro_100_sim' , 'event': 100},
-          'R-200_5': {'Tc': 10, 'C': .85, 'i': 1.56, 'A': 1.46, 'sim': 'pro_5_sim', 'event': 5},
-          'R-200_25': {'Tc': 10, 'C': .9, 'i': 2.51, 'A': 1.46, 'sim': 'pro_25_sim' , 'event': 25},
-          'R-200_100': {'Tc': 10, 'C': .9, 'i': 3.68, 'A': 1.46, 'sim': 'pro_100_sim' , 'event': 100},
-          'R-300_5': {'Tc': 10, 'C': .85, 'i': 1.56, 'A': 12.39, 'sim': 'pro_5_sim', 'event': 5},
-          'R-300_25': {'Tc': 10, 'C': .9, 'i': 2.51, 'A': 2.79, 'sim': 'pro_25_sim' , 'event': 25},
-          'R-300_100': {'Tc': 10, 'C': .9, 'i': 3.68, 'A': 12.39, 'sim': 'pro_100_sim' , 'event': 100},
-          'R-400_5': {'Tc': 10, 'C': .85, 'i': 1.56, 'A': 1.93, 'sim': 'pro_5_sim', 'event': 5},
-          'R-400_25': {'Tc': 10, 'C': .9, 'i': 2.51, 'A': 11.53, 'sim': 'pro_25_sim' , 'event': 25},
-          'R-400_100': {'Tc': 10, 'C': .9, 'i': 3.68, 'A': 1.93, 'sim': 'pro_100_sim' , 'event': 100},
+icatch = {'R-100': {'Tc': 10, 'C': .69, 'i': 2.51, 'A': 28.44, 'sim': 'pro_25_sim' , 'event': 25},
+          'R-200': {'Tc': 10, 'C': .87, 'i': 2.51, 'A': 1.46, 'sim': 'pro_25_sim' , 'event': 25},
+          'R-400': {'Tc': 10, 'C': .87, 'i': 2.51, 'A': 1.93, 'sim': 'pro_25_sim' , 'event': 25},
          }
 
-ipond = {'South Pond': {'infil': 1,
+ipond = {'South Pond': {'infil': 2.3,
                    'rat_perv': 1,
-                   'us': 'R-100_25',
-                   'pond_curve': spond
+                   'us': 'R-100',
+                   'pond_curve': spond,
+                   'scale': .1
                   },
-         'West Pond': {'infil': 1,
+         'West Pond': {'infil': 3.25,
                             'rat_perv': 1,
-                            'us': 'R-200_25',
-                            'pond_curve': wpond
+                            'us': 'R-200',
+                            'pond_curve': wpond,
+                            'scale': .2
                   },
-         'North Pond': {'infil': 1,
+         'North Pond': {'infil': 11,
                             'rat_perv': 1,
-                            'us': 'R-400_25',
-                            'pond_curve': npond
+                            'us': 'R-400',
+                            'pond_curve': npond,
+                            'scale': 1
                   },
-         'East Pond': {'infil': 2,
-                            'rat_perv': 1,
-                            'us': 'R-300_25',
-                            'pond_curve': epond
-                  },
+         # 'East Pond': {'infil': 21,
+         #                    'rat_perv': 1,
+         #                    'us': 'R-300_25',
+         #                    'pond_curve': epond
+         #          },
         }
 
 isim = {'pro_5_sim': {'max_time': 10000},
